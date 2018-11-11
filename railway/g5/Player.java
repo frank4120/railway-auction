@@ -40,10 +40,12 @@ public class Player implements railway.sim.Player{
     private Map<Integer, List<String>> railCities = new HashMap<Integer, List<String>>(); // Stores cities corresponding to specific rail
     private Map<String, List<Integer>> connectedRails = new HashMap<String, List<Integer>>(); //stores rail ids connected to each city
     private Map<Integer, Double> railValues = new HashMap<Integer, Double>(); //this is the traffic/rails in metric, for min bid use minamounts
+    private Map<Integer, Double> mixedValues = new HashMap<Integer, Double>(); //this is the traffic/rails in metric, for min bid use minamounts
+
     private Map<Integer, Double> railDistance = new HashMap<Integer, Double>();
 
     private List<List<Integer>> duplicateRails = new ArrayList<List<Integer>>();
-
+    private Boolean update;
     
     public Player() {
         rand = new Random();
@@ -59,7 +61,7 @@ public class Player implements railway.sim.Player{
       List<BidInfo> allBids) {
         this.budget = budget;
         this.initBudget = budget;
-
+	this.update = false;
         // Initialize availableLinks
         for (int i=0; i<allBids.size(); i++) {
 	    BidInfo bi = allBids.get(i);
@@ -147,8 +149,10 @@ public class Player implements railway.sim.Player{
        		value = value*dist*10;
        		if( value < originalMins.get(id)){
 		    railValues.put(id, originalMins.get(id));
+		    mixedValues.put(id, originalMins.get(id));
 		} else {
 		    railValues.put(id, value);
+		    mixedValues.put(id, value);
 		}
 		railDistance.put(id, dist);
 		id++;
@@ -196,6 +200,13 @@ public class Player implements railway.sim.Player{
 	  playerBudgets.put(player, initBudget);
 	} 
 	playerBudgets.put("random", initBudget);
+      }
+
+      if( ownedCities.size() > 0 && update == false) {
+	  update = true;
+	  for(Integer k : mixedValues.keySet() ){
+	      mixedValues.put(k, originalMins.get(k));
+	  }
       }
 
       if(!bidEquals(lastWinner, lastRoundMaxBid)){
@@ -252,7 +263,11 @@ public class Player implements railway.sim.Player{
 	        for ( int rail : cityRails ) {
 	          if (!adjacentRails.contains(rail) && !ownedRails.contains(rail)) {
 		    adjacentRails.add(rail);
+		    if( availableLinks.contains(rail) ){
+			mixedValues.put(rail, mixedValues.get(rail)+10000);
+		    }
 	          }
+		  
 	        }
 	      }	
 	      // Remove processed cities from ownedCities list
@@ -290,7 +305,7 @@ public class Player implements railway.sim.Player{
         this.bestValue = 0;
         for (int linkId : availableLinks){
 	    //System.out.printf("link: %s-%s, min bid: %f, our value: %f\n", railCities.get(linkId).get(0), railCities.get(linkId).get(1), minAmounts.get(linkId), railValues.get(linkId));
-          double unitValue = railValues.get(linkId) / railDistance.get(linkId);
+          double unitValue = mixedValues.get(linkId) / railDistance.get(linkId);
           if (unitValue > this.bestValue){
             this.bestLink = linkId;
             this.bestValue = unitValue;
@@ -334,7 +349,7 @@ public class Player implements railway.sim.Player{
         return null;
       }
       else{ // If we aren't winning, increment the bid on our most valuable link
-        double maxAmount = railValues.get(this.bestLink) * margin;
+        double maxAmount = mixedValues.get(this.bestLink) * margin;
         double maxUnit = maxAmount / railDistance.get(this.bestLink);
         if (maxUnit > unitPrice){
           double amount = unitPrice * railDistance.get(this.bestLink) + 1;
